@@ -1,0 +1,235 @@
+﻿Program.Sub.ScreenSU.Start
+Gui.frmMaint..Create(BaseForm)
+Gui.frmMaint..Caption("Auto-Drawing Linking Maintenance")
+Gui.frmMaint..Size(9945,2160)
+Gui.frmMaint..MinX(0)
+Gui.frmMaint..MinY(0)
+Gui.frmMaint..Position(0,0)
+Gui.frmMaint..AlwaysOnTop(False)
+Gui.frmMaint..FontName("Tahoma")
+Gui.frmMaint..FontSize(8.25)
+Gui.frmMaint..ControlBox(True)
+Gui.frmMaint..MaxButton(True)
+Gui.frmMaint..MinButton(True)
+Gui.frmMaint..MousePointer(0)
+Gui.frmMaint..Moveable(True)
+Gui.frmMaint..Sizeable(True)
+Gui.frmMaint..ShowInTaskBar(True)
+Gui.frmMaint..TitleBar(True)
+Gui.frmMaint..Event(UnLoad,frmMaint_UnLoad)
+Gui.frmMaint.lblSource.Create(Label,"Source Directory:",True,1260,195,0,390,375,True,0,"Tahoma",8.25,,0,0)
+Gui.frmMaint.lblSource.BorderStyle(0)
+Gui.frmMaint.txtSource.Create(TextBox,"",True,7335,300,0,1965,270,True,0,"Tahoma",8.25,,1)
+Gui.frmMaint.txtSource.Anchor(15)
+Gui.frmMaint.txtSource.Event(GotFocus,txtSource_GotFocus)
+Gui.frmMaint.txtSource.TabStop(True)
+Gui.frmMaint.txtSource.TabIndex(1)
+Gui.frmMaint.cmdSave.Create(Button)
+Gui.frmMaint.cmdSave.Enabled(True)
+Gui.frmMaint.cmdSave.Visible(True)
+Gui.frmMaint.cmdSave.Zorder(0)
+Gui.frmMaint.cmdSave.Size(1125,345)
+Gui.frmMaint.cmdSave.Position(345,1215)
+Gui.frmMaint.cmdSave.Caption("Save")
+Gui.frmMaint.cmdSave.FontName("Tahoma")
+Gui.frmMaint.cmdSave.FontSize(8.25)
+Gui.frmMaint.cmdSave.Event(Click,cmdSave_Click)
+Gui.frmMaint.cmdSave.Anchor(6)
+Gui.frmMaint.txtLink.Create(TextBox,"",True,7335,300,0,1965,660,True,0,"Tahoma",8.25,,1)
+Gui.frmMaint.txtLink.Event(GotFocus,txtLink_GotFocus)
+Gui.frmMaint.txtLink.Event(LostFocus,txtLink_LostFocus)
+Gui.frmMaint.txtLink.TabStop(True)
+Gui.frmMaint.txtLink.TabIndex(2)
+Gui.frmMaint.lblLink.Create(Label,"Link Directory:",True,1035,195,0,390,765,True,0,"Tahoma",8.25,,0,0)
+Gui.frmMaint.lblLink.BorderStyle(0)
+Program.Sub.ScreenSU.End
+
+Program.Sub.Preflight.Start
+V.Global.bConOpen.Declare
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+F.Intrinsic.Control.Try
+	F.Intrinsic.Control.CallSub(populateTxtBox)
+	Gui.frmMaint.cmdSave.Enabled(False)
+	Gui.frmMaint..Show
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(ErrorMsg, CurrentSub, V.Ambient.CurrentSubroutine)
+F.Intrinsic.Control.EndTry
+Program.Sub.Main.End
+
+Program.Sub.ErrorMsg.Start
+'Generic Error message.
+V.Local.sError.Declare
+
+F.Intrinsic.Control.If(V.Global.bConOpen)
+	F.ODBC.Connection!con.Close
+F.Intrinsic.Control.EndIf
+
+f.Intrinsic.String.Build("Project GCG_6748_Drawing_Vault_Linking.g2u {0}{0}Subroutine: {1}{0}Error: {2} with Description: {3}", v.Ambient.NewLine, v.Args.CurrentSub, v.Ambient.ErrorNumber, v.Ambient.ErrorDescription, v.Local.sError)
+f.Intrinsic.UI.Msgbox(v.Local.sError)
+Program.Sub.ErrorMsg.End
+
+Program.Sub.frmMaint_UnLoad.Start
+F.Intrinsic.Control.Try
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(ErrorMsg, CurrentSub, V.Ambient.CurrentSubroutine)
+F.Intrinsic.Control.EndTry
+Program.Sub.frmMaint_UnLoad.End
+Program.Sub.cmdSave_Click.Start
+F.Intrinsic.Control.Try
+	V.Local.bExists.Declare
+	V.Local.sSQL.Declare
+	V.Local.sRet.Declare
+	
+	F.ODBC.Connection!con.OpenCompanyConnection
+	V.Global.bConOpen.Set(True)
+	F.ODBC.Connection!con.TableExists("GCG_6748_DRAWING_MAINT", V.Local.bExists)
+	
+	F.Intrinsic.Control.If(V.Local.bExists.Not)
+		V.Local.sSQL.Set("create table GCG_6748_DRAWING_MAINT (SOURCE VARCHAR(120), LINK VARCHAR(120))")
+		F.ODBC.Connection!con.Execute(V.Local.sSQL)
+	F.Intrinsic.Control.EndIf
+	
+	'Validate Directories first 
+	F.Intrinsic.Control.CallSub(validateDirs)
+	F.Intrinsic.Control.If(V.Args.Msg.Length,>,0)
+		F.Intrinsic.UI.Msgbox(V.Args.Msg)
+		F.Intrinsic.Control.ExitSub
+	F.Intrinsic.Control.EndIf
+	
+	V.Local.sSQL.Set("delete from GCG_6748_DRAWING_MAINT")
+	F.ODBC.Connection!con.Execute(V.Local.sSQL)
+	F.Intrinsic.String.Build("insert into GCG_6748_DRAWING_MAINT (SOURCE, LINK) values ('{0}', '{1}')", V.Screen.frmMaint!txtSource.Text.Trim, V.Screen.frmMaint!txtLink.Text.Trim, V.Local.sSQL)
+	F.ODBC.Connection!con.Execute(V.Local.sSQL)
+	
+	F.Intrinsic.UI.Msgbox("Entry Saved Successfully")
+	
+	V.Local.sSQL.Set("")
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(ErrorMsg, CurrentSub, V.Ambient.CurrentSubroutine)
+F.Intrinsic.Control.EndTry
+Program.Sub.cmdSave_Click.End
+Program.Sub.populateTxtBox.Start
+F.Intrinsic.Control.Try
+	V.Local.bExists.Declare
+	V.Local.sRet.Declare
+	V.Local.bOneRecord.Declare
+	
+	F.ODBC.Connection!con.OpenCompanyConnection
+	V.Global.bConOpen.Set(True)
+	F.ODBC.Connection!con.TableExists("GCG_6748_DRAWING_MAINT", V.Local.bExists)
+	
+	F.Intrinsic.Control.If(V.Local.bExists.Not)
+		F.ODBC.Connection!con.Close
+		V.Global.bConOpen.Set(False)
+		F.Intrinsic.Control.ExitSub
+	F.Intrinsic.Control.Else
+		F.ODBC.Connection!con.ExecuteAndReturn("select * from GCG_6748_DRAWING_MAINT", V.Local.sRet)
+		F.ODBC.Connection!con.Close
+		V.Global.bConOpen.Set(False)
+		F.Intrinsic.String.IsInString(V.Local.sRet, "#$#", True, V.Local.bOneRecord)
+		F.Intrinsic.Control.If(V.Local.bOneRecord)
+			F.Intrinsic.UI.Msgbox("Custom table GCG_6748_DRAWING_MAINT contains more than one record. Please address this and try again.")
+			F.Intrinsic.Control.End
+		F.Intrinsic.Control.Else
+			F.Intrinsic.String.Split(V.Local.sRet, "*!*", V.Local.sRet)
+			gui.frmMaint.txtSource.Text(V.Local.sRet(0).Trim)
+			Gui.frmMaint.txtLink.Text(V.Local.sRet(1).Trim)
+		F.Intrinsic.Control.EndIf
+	F.Intrinsic.Control.EndIf
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(ErrorMsg, CurrentSub, V.Ambient.CurrentSubroutine)
+F.Intrinsic.Control.EndTry
+Program.Sub.populateTxtBox.End
+Program.Sub.txtSource_GotFocus.Start
+F.Intrinsic.Control.Try
+	
+	F.Intrinsic.Control.BlockEvents
+	Gui.frmMaint.txtSource.SelectAll
+	F.Intrinsic.Control.UnBlockEvents
+	
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(ErrorMsg, CurrentSub, V.Ambient.CurrentSubroutine)
+Function.Intrinsic.Control.EndTry
+Program.Sub.txtSource_GotFocus.End
+Program.Sub.txtSource_LostFocus.Start
+F.Intrinsic.Control.Try
+	
+	F.Intrinsic.Control.BlockEvents
+	Gui.frmMaint.cmdSave.Enabled(True)
+	F.Intrinsic.Control.UnBlockEvents
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(ErrorMsg, CurrentSub, V.Ambient.CurrentSubroutine)
+F.Intrinsic.Control.EndTry
+Program.Sub.txtSource_LostFocus.End
+Program.Sub.txtLink_GotFocus.Start
+F.Intrinsic.Control.Try
+	
+	F.Intrinsic.Control.BlockEvents
+	Gui.frmMaint.txtLink.SelectAll
+	F.Intrinsic.Control.UnBlockEvents
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(ErrorMsg, CurrentSub, V.Ambient.CurrentSubroutine)
+Function.Intrinsic.Control.EndTry
+Program.Sub.txtLink_GotFocus.End
+Program.Sub.txtLink_LostFocus.Start
+F.Intrinsic.Control.Try
+	
+	F.Intrinsic.Control.BlockEvents
+	Gui.frmMaint.cmdSave.Enabled(True)
+	F.Intrinsic.Control.UnBlockEvents
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(ErrorMsg, CurrentSub, V.Ambient.CurrentSubroutine)
+F.Intrinsic.Control.EndTry
+Program.Sub.txtLink_LostFocus.End
+
+Program.Sub.validateDirs.Start
+F.Intrinsic.Control.Try
+	V.Local.bRet.Declare(Boolean,False)
+	V.Local.sMsg.Declare(String,"")
+	V.Local.sAddSlash.Declare
+	
+	F.Intrinsic.Control.If(V.Screen.frmMaint!txtSource.Text.Right1, <>, "\")
+		F.Intrinsic.String.Concat(V.Screen.frmMaint!txtSource.Text, "\", V.Local.sAddSlash)
+		Gui.frmMaint.txtSource.Text(V.Local.sAddSlash)
+	F.Intrinsic.Control.EndIf
+	
+	F.Intrinsic.Control.If(V.Screen.frmMaint!txtLink.Text.Right1, <>, "\")
+		F.Intrinsic.String.Concat(V.Screen.frmMaint!txtLink.Text, "\", V.Local.sAddSlash)
+		Gui.frmMaint.txtLink.Text(V.Local.sAddSlash)
+	F.Intrinsic.Control.EndIf
+	
+	F.Intrinsic.Control.If(V.Screen.frmMaint!txtSource.Text, <>, "")
+		F.Intrinsic.File.DirExists(V.Screen.frmMaint!txtSource.Text, V.Local.bRet)
+		F.Intrinsic.Control.If(V.Local.bRet.Not)
+			V.Local.sMsg.Set("Source Directory cannot be found, Check Dir and Save again.")
+			Gui.frmMaint.cmdSave.Enabled(False)
+		F.Intrinsic.Control.EndIf
+	F.Intrinsic.Control.EndIf
+	
+	F.Intrinsic.Control.If(V.Screen.frmMaint!txtLink.Text, <>, "")
+		F.Intrinsic.File.DirExists(V.Screen.frmMaint!txtLink.Text, V.Local.bRet)
+		F.Intrinsic.Control.If(V.Local.bRet.Not)
+			V.Local.sMsg.Set("Link Directory cannot be found, Check Dir and Save again.")
+			Gui.frmMaint.cmdSave.Enabled(False)
+		F.Intrinsic.Control.EndIf
+	F.Intrinsic.Control.EndIf
+
+	F.Intrinsic.Variable.AddRV("Msg", V.Local.sMsg)
+	
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(ErrorMsg, CurrentSub, V.Ambient.CurrentSubroutine)
+F.Intrinsic.Control.EndTry
+Program.Sub.validateDirs.End
+
+Program.Sub.Comments.Start
+${$5$}$3.0.0.0$}$1
+${$6$}$bmedina$}$20220615101113953$}$kOipCrsyLBVj2KoSwkcdK23ChxGVcBlEAQuJasEF7Eybesy/wmKR5CqKbx4tLnrFEmOoTJloVbk=
+Program.Sub.Comments.End
