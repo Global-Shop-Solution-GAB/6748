@@ -1,0 +1,378 @@
+﻿Program.Sub.Preflight.Start
+V.Global.bConOpen.Declare
+V.Global.sNetworkFolderPath.Declare(String, "")
+V.Global.sSourcePath.Declare
+V.Global.sLinkPath.Declare
+V.Global.sErrorPath.Declare
+V.Global.sAllLoc.Declare
+V.Global.sErrorLog.Declare
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+F.Intrinsic.Control.Try
+'TJS, February 2024
+'Customer: Felling Trailers
+'Quote: 14444
+'Updated project to add documents without a rev to the latest rev of the part available
+'Changes marked with TJS throughout
+	V.Local.sFile.Declare
+	V.Local.bRet.Declare
+	V.Local.iRet.Declare
+	V.Local.sGab.Declare
+	'Program gets called once by watchdog when start button is hit. This script then will recursively call itself until it encounters a .stop file. 
+	'.stop file is created when watchdog program is unloaded or stopped.
+	
+	F.Intrinsic.String.Build("{0}\6748_BOM_{1}.stop",V.Caller.FilesDir,V.Caller.CompanyCode,V.Local.sFile)
+	F.Intrinsic.File.Exists(V.Local.sFile,V.Local.bRet)
+	F.Intrinsic.Control.If(V.Local.bRet)
+		F.Intrinsic.Control.End
+	F.Intrinsic.Control.EndIf
+	
+	'Get list of all locations 
+	F.ODBC.Connection!con.OpenCompanyConnection
+	V.Global.bConOpen.Set(True)
+	F.ODBC.Connection!con.ExecuteAndReturn("select LOCATION from INVENTORY_MSTR group by LOCATION", V.Global.sAllLoc)
+	F.Intrinsic.String.Build("#$#{0}",V.Global.sAllLoc,V.Global.sAllLoc)
+	
+	F.Intrinsic.String.Split(V.Global.sAllLoc, "#$#", V.Global.sAllLoc)
+	F.ODBC.Connection!con.Close
+	V.Global.bConOpen.Set(False)
+
+	F.Intrinsic.Control.CallSub(createDirectories)
+	F.Intrinsic.Control.CallSub(moveFiles)
+	
+	'Script should call itself again async 
+	F.Intrinsic.String.Build("{0}\GCG_6748_Drawing_Vault_Linking.g2u",V.Caller.GasDir,V.Local.sGab)
+	F.Global.Task.CallAsyncGas(V.Local.sGab,"",2,V.Local.iRet)
+	
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(ErrorMsg, CurrentSub, V.Ambient.CurrentSubroutine)
+F.Intrinsic.Control.EndTry
+Program.Sub.Main.End
+
+Program.Sub.ErrorMsg.Start
+'Generic Error message.
+V.Local.sError.Declare
+V.Local.sErrorPath.Declare
+V.Local.bExists.Declare
+
+F.Intrinsic.Control.If(V.Global.bConOpen)
+	F.ODBC.Connection!con.Close
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.String.Build("Project GCG_6748_Drawing_Vault_Linking.g2u {0}{0}Subroutine: {1}{0}Error: {2} with Description: {3}", V.Ambient.NewLine, V.Args.CurrentSub, V.Ambient.ErrorNumber, V.Ambient.ErrorDescription, V.Local.sError)
+'TJS - writing error to error directory
+F.Intrinsic.String.Build("{0}\LOG\ERROR_{1}.txt",V.Global.sErrorPath,F.Intrinsic.String.Format(V.Ambient.Now,"YYMMDD_HHNN"),V.Local.sErrorPath)
+F.Intrinsic.File.Exists(V.Local.sErrorPath,V.Local.bExists)
+F.Intrinsic.Control.If(V.Local.bExists)
+	F.Intrinsic.File.PrependToFile(V.Local.sErrorPath,V.Local.sError)
+F.Intrinsic.Control.Else
+	F.Intrinsic.File.String2File(V.Local.sErrorPath,V.Local.sError)
+F.Intrinsic.Control.EndIf
+'F.Intrinsic.UI.Msgbox(V.Local.sError)
+'/TJS		
+
+Program.Sub.ErrorMsg.End
+
+Program.Sub.createDirectories.Start
+'Check that both folders exists, and if not create them. 
+F.Intrinsic.Control.Try
+	V.Local.bExists.Declare
+	V.Local.sRet.Declare
+	V.Local.sSourcePath.Declare
+	V.Local.sLinkPath.Declare
+	V.Local.bOneRecord.Declare
+	V.Local.sErrorPath.Declare
+	V.Local.sErrorMsg.Declare
+
+	'Source path will be the network folder, as specified by the maintanence program. 
+	F.ODBC.Connection!con.OpenCompanyConnection 
+	V.Global.bConOpen.Set(True)
+	F.ODBC.Connection!con.ExecuteAndReturn("select * from GCG_6748_DRAWING_MAINT", V.Local.sRet)
+	F.ODBC.Connection!con.Close
+	V.Global.bConOpen.Set(False)
+	
+	F.Intrinsic.String.IsInString(V.Local.sRet, "#$#", True, V.Local.bOneRecord)
+	F.Intrinsic.Control.If(V.Local.bOneRecord)
+		'TJS
+		'F.Intrinsic.UI.Msgbox("Custom table GCG_6748_DRAWING_MAINT contains more than one record. Please address this and try again.")
+		V.Local.sErrorMsg.Set("Custom table GCG_6748_DRAWING_MAINT contains more than one record. Please address this and try again.")
+		F.Intrinsic.String.Build("{0}\LOG\ERROR_{1}.txt",V.Global.sErrorPath,F.Intrinsic.String.Format(V.Ambient.Now,"YYMMDD_HHNN"),V.Local.sErrorPath)
+		F.Intrinsic.File.Exists(V.Local.sErrorPath,V.Local.bExists)
+		F.Intrinsic.Control.If(V.Local.bExists)
+			F.Intrinsic.File.PrependToFile(V.Local.sErrorPath,V.Local.sErrorMsg)
+		F.Intrinsic.Control.Else
+			F.Intrinsic.File.String2File(V.Local.sErrorPath,V.Local.sErrorMsg)
+		F.Intrinsic.Control.EndIf
+		'/TJS
+		F.Intrinsic.Control.End
+	F.Intrinsic.Control.EndIf
+	
+	F.Intrinsic.String.Split(V.Local.sRet, "*!*", V.Local.sRet)
+	V.Global.sSourcePath.Set(V.Local.sRet(0).Trim)
+	V.Global.sLinkPath.Set(V.Local.sRet(1).Trim)
+	
+	F.Intrinsic.Control.If(V.Global.sSourcePath, =, "", OR, V.Global.sLinkPath, =, "")
+		F.Intrinsic.Control.ExitSub
+	F.Intrinsic.Control.EndIf
+	
+	F.Intrinsic.String.Build("{0}\CUSTOM\6748\LINK\", V.Caller.GlobalDir, V.Local.sLinkPath)
+	F.Intrinsic.File.DirExists(V.Local.sLinkPath, V.Local.bExists)
+	F.Intrinsic.Control.If(V.Local.bExists.Not)
+		F.Intrinsic.File.CreateDir(V.Local.sLinkPath)
+	F.Intrinsic.Control.EndIf
+	
+	'F.Intrinsic.String.Build("{0}\CUSTOM\6748\ERROR\", V.Caller.GlobalDir, V.Global.sErrorPath)
+	'Store Error files in folder named after CC
+	F.Intrinsic.String.Build("{0}\CUSTOM\6748\{1}\ERROR\", V.Caller.GlobalDir, V.Caller.CompanyCode, V.Global.sErrorPath)
+	F.Intrinsic.File.DirExists(V.Global.sErrorPath, V.Local.bExists)
+	F.Intrinsic.Control.If(V.Local.bExists.Not)
+		F.Intrinsic.File.CreateDir(V.Global.sErrorPath)
+	F.Intrinsic.Control.EndIf
+	
+	'TJS - creating a separate directory for unattended error logs
+	F.Intrinsic.String.Build("{0}\CUSTOM\6748\{1}\ERROR\LOG", V.Caller.GlobalDir, V.Caller.CompanyCode, V.Global.sErrorLog)
+	F.Intrinsic.File.DirExists(V.Global.sErrorLog, V.Local.bExists)
+	F.Intrinsic.Control.If(V.Local.bExists.Not)
+		F.Intrinsic.File.CreateDir(V.Global.sErrorLog)
+	F.Intrinsic.Control.EndIf
+	'/TJS
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(ErrorMsg, CurrentSub, V.Ambient.CurrentSubroutine)
+F.Intrinsic.Control.EndTry
+Program.Sub.createDirectories.End
+
+Program.Sub.moveFiles.Start
+F.Intrinsic.Control.Try
+	V.Local.sFilesToMove.Declare
+	V.Local.sFilesArray.Declare
+	V.Local.sFilePathFrom.Declare
+	V.Local.sFilePathTo.Declare
+	V.Local.iRet.Declare
+	V.Local.i.Declare
+	V.Local.sErrorMsg.Declare
+	V.Local.sErrorList.Declare
+	V.Local.bExists.Declare
+	V.Local.bFileLocked.Declare
+	V.Local.sErrorPath.Declare
+	
+	F.Intrinsic.File.GetFileList(V.Global.sSourcePath, V.Local.sFilesToMove)
+	F.Intrinsic.Control.If(V.Local.sFilesToMove, =, "")
+		F.Intrinsic.Control.ExitSub
+	F.Intrinsic.Control.EndIf
+	
+	'File Name Structure from Customer is PART_REV 
+	F.Intrinsic.String.Split(V.Local.sFilesToMove, ":", V.Local.sFilesArray)
+	F.Intrinsic.Control.For(V.Local.i, 0, V.Local.sFilesArray.UBound, 1)
+		F.Intrinsic.String.Build("{0}{1}", V.Global.sSourcePath, V.Local.sFilesArray(V.Local.i), V.Local.sFilePathFrom)
+		'Check if the File about to be moved is in use by PDM
+		F.Intrinsic.UI.Sleep(4)
+		F.Intrinsic.File.IsFileLocked(V.Local.sFilePathFrom, V.Local.bFileLocked)
+		
+		'Open copy 
+		
+		F.Intrinsic.Control.If(V.Local.bFileLocked.Not)
+			F.Intrinsic.String.Build("{0}{1}", V.Global.sLinkPath, V.Local.sFilesArray(V.Local.i), V.Local.sFilePathTo)
+			'Errors out if file already exists at location... So add check for that 
+			F.Intrinsic.File.Exists(V.Local.sFilePathTo, V.Local.bExists)
+			F.Intrinsic.Control.If(V.Local.bExists)
+				F.Intrinsic.File.DeleteFile(V.Local.sFilePathTo)
+			F.Intrinsic.Control.EndIf
+			F.Intrinsic.File.MoveFile(V.Local.sFilePathFrom, V.Local.sFilePathTo, V.Local.iRet)
+			F.Intrinsic.Control.If(V.Local.iRet, =, 0)
+				'Build up list of errored out files 
+				F.Intrinsic.Variable.AddToArray(V.Local.sErrorList, V.Local.sFilesArray(V.Local.i))
+			F.Intrinsic.Control.EndIf
+		F.Intrinsic.Control.EndIf
+	F.Intrinsic.Control.Next(V.Local.i)
+	
+	'Print error 
+	F.Intrinsic.Control.If(V.Local.sErrorList, <>, "")
+		V.Local.sErrorMsg.Set("The following file(s) could not be moved from network folder to Global directory: ")
+		F.Intrinsic.Control.For(V.Local.i, 0, V.Local.sErrorList.UBound, 1)	
+			F.Intrinsic.String.Concat(V.Local.sErrorMsg, ", ", V.Local.sErrorList(V.Local.i), V.Local.sErrorMsg)
+		F.Intrinsic.Control.Next(V.Local.i)
+		
+		'TJS - writing error to error directory
+		F.Intrinsic.String.Build("{0}\LOG\ERROR_{1}.txt",V.Global.sErrorPath,F.Intrinsic.String.Format(V.Ambient.Now,"YYMMDD_HHNN"),V.Local.sErrorPath)
+		F.Intrinsic.File.Exists(V.Local.sErrorPath,V.Local.bExists)
+		F.Intrinsic.Control.If(V.Local.bExists)
+			F.Intrinsic.File.PrependToFile(V.Local.sErrorPath,V.Local.sErrorMsg)
+		F.Intrinsic.Control.Else
+			F.Intrinsic.File.String2File(V.Local.sErrorPath,V.Local.sErrorMsg)
+		F.Intrinsic.Control.EndIf
+		
+		'F.Intrinsic.UI.Msgbox(V.Local.sErrorMsg, "Files not Moved")
+		'/TJS		
+	F.Intrinsic.Control.EndIf
+	
+	F.Intrinsic.String.Join(V.Local.sFilesArray, ":", V.Local.sFilesArray)
+	F.Intrinsic.Control.CallSub(linkDocuments, movedFiles, V.Local.sFilesArray)
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(ErrorMsg, CurrentSub, V.Ambient.CurrentSubroutine)
+F.Intrinsic.Control.EndTry
+Program.Sub.moveFiles.End
+
+Program.Sub.linkDocuments.Start
+F.Intrinsic.Control.Try
+	V.Local.sSQL.Declare
+	V.Local.sMovedFiles.Declare
+	V.Local.iLocIndex.Declare
+	V.Local.iPartIndex.Declare
+	V.Local.sPartRevTemp.Declare
+	V.Local.sPart.Declare
+	V.Local.sReV.Declare
+	V.Local.sRet.Declare
+	V.Local.sPartReV.Declare
+	V.Local.sPartKey.Declare
+	V.Local.sPartLinkIDs.Declare
+	V.Local.sFileExt.Declare
+	V.Local.sReplaceExt.Declare
+	V.Local.bUnderscoreExists.Declare
+	V.Local.sFileNoExt.Declare
+	V.Local.iDocID.Declare
+	V.Local.sFQP.Declare
+	V.Local.bPartExists.Declare
+	V.Local.sFilePathFrom.Declare
+	V.Local.sFilePathTo.Declare
+	V.Local.iRet.Declare
+	V.Local.bExists.Declare
+	V.Local.iFileNameCompIndex.Declare
+	V.Local.sLastElement.Declare
+	V.Local.iPartsElement.Declare
+	V.Local.sPartBuildup.Declare
+	V.Local.sErrorPath.Declare
+	V.Local.sErrorMsg.Declare
+	
+	F.Intrinsic.String.Split(V.Args.movedFiles, ":", V.Local.sMovedFiles)
+	'Loop through all parts in the files that have been moved
+	F.Intrinsic.Control.For(V.Local.iPartIndex, 0, V.Local.sMovedFiles.UBound, 1)
+		'Record file extension, and strip it away at the index of the part file names
+		F.Intrinsic.File.GetExtensionComponent(V.Local.sMovedFiles(V.Local.iPartIndex), V.Local.sFileExt)
+		F.Intrinsic.String.Concat(".", V.Local.sFileExt, V.Local.sReplaceExt)
+		F.Intrinsic.String.Replace(V.Local.sMovedFiles(V.Local.iPartIndex), V.Local.sReplaceExt, "", V.Local.sFileNoExt)
+		
+		'Extract part and rev from file name, delimited by _ character
+		V.Local.sPartRevTemp.Redim(0, 0)
+		F.Intrinsic.String.IsInString(V.Local.sFileNoExt, "_", True, V.Local.bUnderscoreExists)
+		F.Intrinsic.Control.If(V.Local.bUnderscoreExists)
+			F.Intrinsic.String.Split(V.Local.sFileNoExt, "_", V.Local.sPartRevTemp)
+			
+			'Their parts contain _ in the part number sometimes. Rev will always be last element and can only be 1-3 characters (inclusive) long
+			'0-X index Part, last index Rev
+			V.Local.sLastElement.Set(V.Local.sPartRevTemp(V.Local.sPartRevTemp.UBound))
+			F.Intrinsic.Control.If(V.Local.sLastElement.Length, >=, 1, AND, V.Local.sLastElement.Length, <=, 3)
+				V.Local.sReV.Set(V.Local.sLastElement)
+				
+				'Set Part
+				F.Intrinsic.Math.Sub(V.Local.sPartRevTemp.UBound, 1, V.Local.iPartsElement)
+				'Means it only had 1 _ separating rev and part num
+				F.Intrinsic.Control.If(V.Local.iPartsElement, =, 0)
+					V.Local.sPart.Set(V.Local.sPartRevTemp(0))
+				F.Intrinsic.Control.Else
+				'Otherwise, the part itself contains _, so rebuild part string
+					V.Local.sPartBuildup.Set("")
+					F.Intrinsic.Control.For(V.Local.iFileNameCompIndex, 0, V.Local.iPartsElement, 1)
+					'Build up string containing part name (which may have underscores). Acts as a join, but we're excluding last element, which if the condition is met is the rev
+						F.Intrinsic.Control.If(V.Local.iPartsElement, =, 0)
+							V.Local.sPartBuildup.Set(V.Local.sPartRevTemp(V.Local.iFileNameCompIndex))
+						F.Intrinsic.Control.Else
+							F.Intrinsic.String.Concat(V.Local.sPartBuildup, "_", V.Local.sPartRevTemp(V.Local.iFileNameCompIndex), V.Local.sPartBuildup)
+						F.Intrinsic.Control.EndIf
+					F.Intrinsic.Control.Next(V.Local.iFileNameCompIndex)
+					V.Local.sPart.Set(V.Local.sPartBuildup)
+				F.Intrinsic.Control.EndIf
+			'Means part name contains a _, but does not have a rev
+			F.Intrinsic.Control.Else
+				V.Local.sReV.Set("")
+				V.Local.sPart.Set(V.Local.sFileNoExt)
+			F.Intrinsic.Control.EndIf
+			
+			'V.Local.sPart.Set(V.Local.sPartRevTemp(0))
+			'V.Local.sReV.Set(V.Local.sPartRevTemp(1))
+		F.Intrinsic.Control.Else
+			V.Local.sPart.Set(V.Local.sFileNoExt)
+			V.Local.sReV.Set("")
+		F.Intrinsic.Control.EndIf
+		
+		V.Local.sPart.Set(V.Local.sPart.Trim)
+		V.Local.sReV.Set(V.Local.sReV.Trim)
+	
+		F.Intrinsic.String.GSSPartString(V.Local.sPart, V.Local.sRev, V.Local.sPartRev)
+		V.Local.bPartExists.Set(False)
+		
+		'Loop through all locations for the part. Set flag to true if it exists for any of the given locations, and proceed w/ linking
+		F.Intrinsic.Control.For(V.Local.iLocIndex, 0, V.Global.sAllLoc.UBound, 1)
+			'TJS - If Rev is not present then we are attaching documents to the latest rev in inventory by create date for all locations
+			F.Intrinsic.Control.If(V.Local.sReV.Trim,=,"")				
+				F.ODBC.Connection!conts.OpenCompanyConnection
+				
+				F.Intrinsic.String.Build("Select top 1 PART from V_INVENTORY_MST3 where RTRIM(Left(PART,17)) = '{0}' and LOCATION = '{1}' order by PART_CREATE_DATE desc;",V.Local.sFileNoExt.Trim,V.Global.sAllLoc(V.Local.iLocIndex),V.Local.sSQL)
+				F.ODBC.Connection!conts.ExecuteAndReturn(V.Local.sSQL,V.Local.sSQL)
+				
+				F.ODBC.Connection!conts.Close
+			
+				F.Intrinsic.String.Right(V.Local.sSQL.Trim,3,V.Local.sRev)
+				F.Intrinsic.String.LTrim(V.Local.sRev,V.Local.sRev)
+				F.Intrinsic.String.RTrim(V.Local.sRev,V.Local.sRev)
+				
+				F.Intrinsic.String.GSSPartString(V.Local.sPart, V.Local.sRev, V.Local.sPartRev)
+			F.Intrinsic.Control.EndIf			
+			'/TJS
+			F.Global.Inventory.GetPartInfo(V.Local.sPart, V.Local.sRev, V.Global.sAllLoc(V.Local.iLocIndex).Trim, V.Local.sRet)
+			
+			F.Intrinsic.Control.If(V.Local.sRet,<>,"***NOPARTFOUND***",OR,V.Local.bPartExists,=,True)
+				V.Local.bPartExists.Set(True)
+			F.Intrinsic.Control.EndIf
+		F.Intrinsic.Control.Next(V.Local.iLocIndex)
+
+		F.Intrinsic.Control.If(V.Local.bPartExists)
+		'GAB Help Incorrectly states to concat part, rev, and location. Only works if you pass part + rev
+		'Will be attached to all locations. 	
+			F.Global.DocumentControl.GetLinkID(V.Local.sPartRev, 30, V.Local.sPartLinkIDs)
+			'Build up filename path i.e. path\PartNum_ReV.ext
+			F.Intrinsic.String.Concat(V.Global.sLinkPath, V.Local.sMovedFiles(V.Local.iPartIndex), V.Local.sFQP)
+			F.Intrinsic.Control.If(V.Local.sPartLinkIDs, =, -1)
+				'Means no link exists. Create new reference
+				F.Global.DocumentControl.CreateReference(V.Local.sPartRev,30,V.Local.sPartLinkIDs)
+			F.Intrinsic.Control.Else
+				'Does exist. So delete the existing doc ID ref 
+				Function.Global.DocumentControl.GetDocumentID(V.Local.sPartLinkIDs, V.Local.sMovedFiles(V.Local.iPartIndex), V.Local.iDocID)
+				Function.Global.DocumentControl.DeleteDocument(V.Local.iDocID)
+			F.Intrinsic.Control.EndIf
+			F.Global.DocumentControl.AddDocument(V.Local.sPartLinkIDs, V.Local.sFQP, "", -1, V.Local.sFileExt) ' TJS - This will supply the path from ATG_DOC_PATH if a path exists for the filetype specified and will then error 
+		F.Intrinsic.Control.Else
+		'Move part file back to an error folder if it does not exist 
+			F.Intrinsic.String.Build("{0}{1}", V.Global.sLinkPath, V.Local.sMovedFiles(V.Local.iPartIndex), V.Local.sFilePathFrom)
+			F.Intrinsic.String.Build("{0}{1}", V.Global.sErrorPath, V.Local.sMovedFiles(V.Local.iPartIndex), V.Local.sFilePathTo)
+			
+			F.Intrinsic.File.Exists(V.Local.sFilePathTo, V.Local.bExists)
+			F.Intrinsic.Control.If(V.Local.bExists)
+				F.Intrinsic.File.DeleteFile(V.Local.sFilePathTo)
+			F.Intrinsic.Control.EndIf
+			F.Intrinsic.File.MoveFile(V.Local.sFilePathFrom, V.Local.sFilePathTo, V.Local.iRet)
+			
+			F.Intrinsic.String.Build("Part '{0}' is not in inventory.  File '{1}' has been moved to {2}",V.Local.sPartReV.Trim,V.Local.sMovedFiles(V.Local.iPartIndex),V.Local.sFilePathTo,V.Local.sErrorMsg)
+			
+			F.Intrinsic.String.Build("{0}\LOG\ERROR_{1}.txt",V.Global.sErrorPath,F.Intrinsic.String.Format(V.Ambient.Now,"YYMMDD_HHNN"),V.Local.sErrorPath)
+			F.Intrinsic.File.Exists(V.Local.sErrorPath,V.Local.bExists)
+			F.Intrinsic.Control.If(V.Local.bExists)
+				F.Intrinsic.File.PrependToFile(V.Local.sErrorPath,V.Local.sErrorMsg)
+			F.Intrinsic.Control.Else
+				F.Intrinsic.File.String2File(V.Local.sErrorPath,V.Local.sErrorMsg)
+			F.Intrinsic.Control.EndIf
+			
+		F.Intrinsic.Control.EndIf
+			
+	F.Intrinsic.Control.Next(V.Local.iPartIndex)
+	
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(ErrorMsg, CurrentSub, V.Ambient.CurrentSubroutine)
+F.Intrinsic.Control.EndTry
+Program.Sub.linkDocuments.End
+
+Program.Sub.Comments.Start
+${$5$}$20.1.8784.19863$}$1
+${$6$}$tsmith$}$20240208092830511$}$xqPbj9atw05FglvzeFsZ9cqXP+qvG6tXzbnNO/GoOag57+mINn+hqx6yr+ieGpErCgxfmuobAQY=
+Program.Sub.Comments.End
