@@ -1,0 +1,210 @@
+﻿Program.Sub.ScreenSU.Start
+Gui.frm_DL_Watchdog..Create(BaseForm)
+Gui.frm_DL_Watchdog..Caption("Doc Link Watchdog")
+Gui.frm_DL_Watchdog..Size(3405,1770)
+Gui.frm_DL_Watchdog..MinX(0)
+Gui.frm_DL_Watchdog..MinY(0)
+Gui.frm_DL_Watchdog..Position(0,0)
+Gui.frm_DL_Watchdog..BackColor(-2147483633)
+Gui.frm_DL_Watchdog..MaxButton(False)
+Gui.frm_DL_Watchdog..MinButton(False)
+Gui.frm_DL_Watchdog..MousePointer(0)
+Gui.frm_DL_Watchdog..Sizeable(False)
+Gui.frm_DL_Watchdog..Event(UnLoad,Form_UnLoad)
+Gui.frm_DL_Watchdog..AlwaysOnTop(False)
+Gui.frm_DL_Watchdog..FontName("Tahoma")
+Gui.frm_DL_Watchdog..FontSize(8.25)
+Gui.frm_DL_Watchdog..ControlBox(True)
+Gui.frm_DL_Watchdog..Moveable(True)
+Gui.frm_DL_Watchdog..ShowInTaskBar(True)
+Gui.frm_DL_Watchdog..TitleBar(True)
+Gui.frm_DL_Watchdog.cmdStart.Create(Button)
+Gui.frm_DL_Watchdog.cmdStart.Size(855,375)
+Gui.frm_DL_Watchdog.cmdStart.Position(525,615)
+Gui.frm_DL_Watchdog.cmdStart.Caption("START")
+Gui.frm_DL_Watchdog.cmdStart.Event(Click,cmdStart_Click)
+Gui.frm_DL_Watchdog.cmdStart.Enabled(True)
+Gui.frm_DL_Watchdog.cmdStart.Visible(True)
+Gui.frm_DL_Watchdog.cmdStart.Zorder(0)
+Gui.frm_DL_Watchdog.cmdStart.FontName("Tahoma")
+Gui.frm_DL_Watchdog.cmdStart.FontSize(8.25)
+Gui.frm_DL_Watchdog.cmdStOP.Create(Button)
+Gui.frm_DL_Watchdog.cmdStOP.Size(855,375)
+Gui.frm_DL_Watchdog.cmdStOP.Position(1755,630)
+Gui.frm_DL_Watchdog.cmdStOP.Caption("STOP")
+Gui.frm_DL_Watchdog.cmdStOP.Event(Click,cmdStop_Click)
+Gui.frm_DL_Watchdog.cmdStOP.Enabled(True)
+Gui.frm_DL_Watchdog.cmdStOP.Visible(True)
+Gui.frm_DL_Watchdog.cmdStOP.Zorder(0)
+Gui.frm_DL_Watchdog.cmdStOP.FontName("Tahoma")
+Gui.frm_DL_Watchdog.cmdStOP.FontSize(8.25)
+Gui.frm_DL_Watchdog.lbl1.Create(Label,"Current Status:",True,1245,255,0,315,195,True,0,"Arial",8,-2147483633,0,0)
+Gui.frm_DL_Watchdog.lbl1.BorderStyle(0)
+Gui.frm_DL_Watchdog.lblStatus.Create(Label,"INACTIVE",True,1110,255,0,1635,195,True,0,"Arial",10,-2147483633,0,0)
+Gui.frm_DL_Watchdog.lblStatus.FontStyle(True,False,False,False,False)
+Gui.frm_DL_Watchdog.lblStatus.ForeColor(255)
+Gui.frm_DL_Watchdog.lblStatus.BorderStyle(0)
+Program.Sub.ScreenSU.End
+
+Program.Sub.Preflight.Start
+	v.Global.sScriptLoc.Declare(string)
+	v.Global.bRunScript.Declare(boolean)
+Program.Sub.Preflight.End
+Program.Sub.Main.Start
+	f.Intrinsic.Control.Try
+		'Program will run on pre online update hook 38120 
+		'a screen will show up to either start uploading unattended time from factory wiz or to stop uploading time.
+		'a stop file will get created that will stop gcg_4482_Labor_Upload
+		
+		F.Intrinsic.Control.CallSub(IsRunning)
+		
+		'Remove this. We want to have the watchdog program automatically enable script if it wasn't running before
+		'gui.frm_DL_Watchdog.cmdStop.Enabled(False)
+		
+		gui.frm_DL_Watchdog..Show		
+	f.Intrinsic.Control.Catch
+		f.Intrinsic.Control.CallSub(ErrorMsg, CurrentSub, v.Ambient.CurrentSubroutine)
+	f.Intrinsic.Control.EndTry	
+Program.Sub.Main.End
+Program.Sub.cmdStart_Click.Start
+	F.Intrinsic.Control.Try
+		V.Local.sFile.Declare(String)
+		V.Local.bRet.Declare(Boolean,False)
+		V.Local.sGab.Declare(String)
+		V.Local.iRet.Declare(String)		
+		
+		F.Intrinsic.String.Build("{0}\6748_BOM_{1}.stop",V.Caller.FilesDir,V.Caller.CompanyCode,V.Local.sFile)
+		F.Intrinsic.File.Exists(V.Local.sFile,v.Local.bRet)
+		
+		F.Intrinsic.Control.If(V.Local.bRet,=,True)
+			F.Intrinsic.File.DeleteFile(V.Local.sFile)
+		F.Intrinsic.Control.EndIf
+		
+		gui.frm_DL_Watchdog.lblStatus.text("ACTIVE")
+		gui.frm_DL_Watchdog.lblStatus.ForeColor(25600)
+		
+		gui.frm_DL_Watchdog.cmdStart.Enabled(False)
+		gui.frm_DL_Watchdog.cmdStop.Enabled(True)
+		
+		f.Intrinsic.String.Build("{0}\GCG_6748_Drawing_Vault_Linking.g2u",v.Caller.GasDir,V.Local.sGab)
+		F.Global.Task.CallAsyncGas(V.Local.sGab,"",2,V.Local.iRet)
+		
+	F.Intrinsic.Control.Catch
+		f.Intrinsic.Control.CallSub(ErrorMsg, CurrentSub, v.Ambient.CurrentSubroutine)
+	F.Intrinsic.Control.EndTry
+Program.Sub.cmdStart_Click.End
+Program.Sub.cmdStop_Click.Start
+'	f.Intrinsic.Control.Try
+'		gui.frm_DL_Watchdog.lblStatus.text("INACTIVE")
+'		gui.frm_DL_Watchdog.lblStatus.ForeColor(255)
+'	f.Intrinsic.Control.Catch
+'		f.Intrinsic.Control.CallSub(ErrorMsg, CurrentSub, v.Ambient.CurrentSubroutine)
+'	f.Intrinsic.Control.EndTry
+	
+	F.Intrinsic.Control.Try
+		V.Local.sFile.Declare(String)
+		V.Local.bRet.Declare(Boolean,False)
+		
+		gui.frm_DL_Watchdog.lblStatus.text("INACTIVE")
+		gui.frm_DL_Watchdog.lblStatus.ForeColor(255)
+		
+		Gui.frm_DL_Watchdog.cmdStart.Enabled(True)
+		gui.frm_DL_Watchdog.cmdStop.Enabled(False)
+		
+		F.Intrinsic.String.Build("{0}\6748_BOM_{1}.stop",V.Caller.FilesDir,V.Caller.CompanyCode,V.Local.sFile)
+		F.Intrinsic.File.Exists(V.Local.sFile,v.Local.bRet)
+		
+		F.Intrinsic.Control.If(V.Local.bRet,=,False)
+			F.Intrinsic.File.String2File(V.Local.sFile,"BOM documents not being uploaded")
+		F.Intrinsic.Control.EndIf
+		
+		gui.frm_DL_Watchdog..Enabled(True)
+'		gui.frm_DL_Watchdog..Enabled(False)
+	F.Intrinsic.Control.Catch
+		f.Intrinsic.Control.CallSub(ErrorMsg, CurrentSub, v.Ambient.CurrentSubroutine)
+	F.Intrinsic.Control.EndTry
+Program.Sub.cmdStop_Click.End
+
+Program.Sub.IsRunning.Start
+	F.Intrinsic.Control.Try
+		v.Local.sFile.Declare(string)
+		v.Local.i.Declare(Long)
+		v.Local.bCheck.Declare(Boolean)
+		v.Local.sText.Declare(String)
+		
+'		Function.Intrinsic.Debug.InvokeDebugger
+'		Function.Intrinsic.Debug.Stop
+		'we run the program async so it will not hold up online update - we check the PID and if it is still running, we end the current program.
+		f.Intrinsic.String.Build("{0}\6748_BOM_{1}.pid",v.Caller.FilesDir,V.Caller.CompanyCode,v.Local.sFile)
+		f.Intrinsic.File.Exists(v.Local.sFile,v.Local.bCheck)
+		f.Intrinsic.Control.If(v.Local.bCheck,=,True)
+			f.Intrinsic.File.File2String(v.local.sFile,v.Local.sText)
+			f.Intrinsic.Task.PIDRunning(v.Local.sText.Long,v.Local.bCheck)
+			f.Intrinsic.Control.If(v.Local.bCheck,=,True)
+				'end program
+				F.Intrinsic.Control.End
+		
+			f.Intrinsic.Control.Else
+				'create file with current PID and continue running
+				f.Intrinsic.File.String2File(v.Local.sFile,v.Ambient.PID)	
+				'We want the watchdog to automatically start the script if it wasn't before 
+				F.Intrinsic.Control.CallSub(cmdStart_Click)
+			f.Intrinsic.Control.EndIf
+		f.Intrinsic.Control.Else
+			'create file with current PID and continue running
+			f.Intrinsic.File.String2File(v.Local.sFile,v.Ambient.PID)
+			'We want the watchdog to automatically start the script if it wasn't before 
+			F.Intrinsic.Control.CallSub(cmdStart_Click)
+		f.Intrinsic.Control.EndIf
+	
+	F.Intrinsic.Control.Catch
+		f.Intrinsic.Control.CallSub(ErrorMsg, CurrentSub, v.Ambient.CurrentSubroutine)
+	F.Intrinsic.Control.EndTry
+Program.Sub.IsRunning.End
+
+Program.Sub.Form_UnLoad.Start
+F.Intrinsic.Control.Try
+V.Local.sError.Declare(String)
+V.Local.sFile.Declare(String)
+V.Local.bRet.Declare(Boolean,False)
+
+f.Intrinsic.String.Build("{0}\6748_BOM_{1}.pid",v.Caller.FilesDir,V.Caller.CompanyCode,v.Local.sFile)
+F.Intrinsic.File.Exists(V.Local.sFile,V.Local.bRet)
+
+F.Intrinsic.Control.If(V.Local.bRet,=,True)
+	F.Intrinsic.File.DeleteFile(V.Local.sFile)
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.String.Build("{0}\6748_BOM_{1}.stop",V.Caller.FilesDir,V.Caller.CompanyCode,V.Local.sFile)
+F.Intrinsic.File.Exists(V.Local.sFile,v.Local.bRet)
+
+F.Intrinsic.Control.If(V.Local.bRet,=,False)
+	F.Intrinsic.File.String2File(V.Local.sFile,"BOM documents not being uploaded")
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.Control.CallSub(cmdStop_Click)
+
+F.Intrinsic.Control.End
+
+F.Intrinsic.Control.Catch
+	f.Intrinsic.Control.CallSub(ErrorMsg, CurrentSub, v.Ambient.CurrentSubroutine)
+F.Intrinsic.Control.EndTry
+Program.Sub.Form_UnLoad.End
+
+Program.Sub.ErrorMsg.Start
+v.Local.sError.Declare
+
+'Closes ODBC connection, default to connection : "con"
+'f.Intrinsic.Control.If(V.ODBC.Con.Exists, =, 1)
+'	f.ODBC.Connection!con.Close
+'f.Intrinsic.Control.EndIf
+
+'Generic Error message.
+f.Intrinsic.String.Build("Project GCG_6748_Doc_Link_Watchdog.g2u {0}{0}Subroutine: {1}{0}Error: {2} with Description: {3}", v.Ambient.NewLine, v.Args.CurrentSub, v.Ambient.ErrorNumber, v.Ambient.ErrorDescription, v.Local.sError)
+f.Intrinsic.UI.Msgbox(v.Local.sError)
+Program.Sub.ErrorMsg.End
+
+Program.Sub.Comments.Start
+${$5$}$20.1.8256.24238$}$1
+${$6$}$bmedina$}$20220816210203440$}$kOipCrsyLBVj2KoSwkcdK23ChxGVcBlEEofbnU5oIJcvJ+Ob1R7zLhpau6zvWeugRdw/wCPHduI=
+Program.Sub.Comments.End
